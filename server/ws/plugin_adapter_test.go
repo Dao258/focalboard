@@ -228,16 +228,34 @@ func TestGetUserIDsForTeam(t *testing.T) {
 	wg.Wait()
 
 	t.Run("should find that only user1 is connected to team 1", func(t *testing.T) {
+		mockedMembers := []*model.User{{ID: userID1}, {ID: userID2}}
+		th.store.EXPECT().
+			GetUsersByTeam(teamID1).
+			Return(mockedMembers, nil).
+			Times(1)
+
 		userIDs := th.pa.getUserIDsForTeam(teamID1)
 		require.ElementsMatch(t, []string{userID1}, userIDs)
 	})
 
 	t.Run("should find that both users are connected to team 2", func(t *testing.T) {
+		mockedMembers := []*model.User{{ID: userID1}, {ID: userID2}}
+		th.store.EXPECT().
+			GetUsersByTeam(teamID2).
+			Return(mockedMembers, nil).
+			Times(1)
+
 		userIDs := th.pa.getUserIDsForTeam(teamID2)
 		require.ElementsMatch(t, []string{userID1, userID2}, userIDs)
 	})
 
 	t.Run("should ignore user1 if webConn 2 inactive when getting team 2 user ids", func(t *testing.T) {
+		mockedMembers := []*model.User{{ID: userID1}, {ID: userID2}}
+		th.store.EXPECT().
+			GetUsersByTeam(teamID2).
+			Return(mockedMembers, nil).
+			Times(1)
+
 		th.pa.OnWebSocketDisconnect(webConnID2, userID1)
 
 		userIDs := th.pa.getUserIDsForTeam(teamID2)
@@ -245,15 +263,38 @@ func TestGetUserIDsForTeam(t *testing.T) {
 	})
 
 	t.Run("should still find user 1 in team 1 after the webConn 2 disconnection", func(t *testing.T) {
+		mockedMembers := []*model.User{{ID: userID1}, {ID: userID2}}
+		th.store.EXPECT().
+			GetUsersByTeam(teamID1).
+			Return(mockedMembers, nil).
+			Times(1)
+
 		userIDs := th.pa.getUserIDsForTeam(teamID1)
 		require.ElementsMatch(t, []string{userID1}, userIDs)
 	})
 
 	t.Run("should find again both users if the webConn 2 comes back", func(t *testing.T) {
+		mockedMembers := []*model.User{{ID: userID1}, {ID: userID2}}
+		th.store.EXPECT().
+			GetUsersByTeam(teamID2).
+			Return(mockedMembers, nil).
+			Times(1)
+
 		th.pa.OnWebSocketConnect(webConnID2, userID1)
 
 		userIDs := th.pa.getUserIDsForTeam(teamID2)
 		require.ElementsMatch(t, []string{userID1, userID2}, userIDs)
+	})
+
+	t.Run("should only find user 1 if user 2 has an active connection but is not a team member anymore", func(t *testing.T) {
+		mockedMembers := []*model.User{{ID: userID1}}
+		th.store.EXPECT().
+			GetUsersByTeam(teamID2).
+			Return(mockedMembers, nil).
+			Times(1)
+
+		userIDs := th.pa.getUserIDsForTeam(teamID2)
+		require.ElementsMatch(t, []string{userID1}, userIDs)
 	})
 }
 

@@ -192,10 +192,28 @@ func (pa *PluginAdapter) getUserIDsForTeam(teamID string) []string {
 		}
 	}
 
-	userIDs := []string{}
-	for userID := range userMap {
-		userIDs = append(userIDs, userID)
+	// we need to check that the users from the listeners are still
+	// members of the team
+	members, err := pa.store.GetUsersByTeam(teamID)
+	if err != nil {
+		pa.logger.Error("error getting members by team",
+			mlog.String("method", "getUserIDsForTeam"),
+			mlog.String("teamID", teamID),
+		)
+		return nil
 	}
+
+	// the resulting userIDs would be the intersection between the
+	// user listeners subscribed to the team and the team members
+	userIDs := []string{}
+	for _, member := range members {
+		for userID := range userMap {
+			if userID == member.ID {
+				userIDs = append(userIDs, userID)
+			}
+		}
+	}
+
 	return userIDs
 }
 
@@ -396,18 +414,18 @@ func (pa *PluginAdapter) BroadcastConfigChange(pluginConfig model.ClientConfig) 
 	pa.sendMessageToAll(utils.StructToMap(pluginConfig))
 }
 
-// sendTeamMessageSkipCluster sends a message to all the users
-// with a websocket client subscribed to a given team.
-func (pa *PluginAdapter) sendTeamMessageSkipCluster(event, teamID string, payload map[string]interface{}) {
-	userIDs := pa.getUserIDsForTeam(teamID)
-	pa.sendUserMessageSkipCluster(event, payload, userIDs...)
-}
-
 // sendUserMessageSkipCluster sends the message to specific users.
 func (pa *PluginAdapter) sendUserMessageSkipCluster(event string, payload map[string]interface{}, userIDs ...string) {
 	for _, userID := range userIDs {
 		pa.api.PublishWebSocketEvent(event, payload, &mmModel.WebsocketBroadcast{UserId: userID})
 	}
+}
+
+// sendTeamMessageSkipCluster sends a message to all the users
+// with a websocket client subscribed to a given team.
+func (pa *PluginAdapter) sendTeamMessageSkipCluster(event, teamID string, payload map[string]interface{}) {
+	userIDs := pa.getUserIDsForTeam(teamID)
+	pa.sendUserMessageSkipCluster(event, payload, userIDs...)
 }
 
 // sendTeamMessage sends and propagates a message that is aimed
